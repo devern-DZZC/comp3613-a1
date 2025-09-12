@@ -1,15 +1,27 @@
-from flask_jwt_extended import create_access_token, jwt_required, JWTManager, get_jwt_identity, verify_jwt_in_request
-
+from flask_jwt_extended import create_access_token, jwt_required, JWTManager, get_jwt_identity, verify_jwt_in_request, unset_jwt_cookies
+import json, os
 from App.models import User
 from App.database import db
 
+SESSION_FILE = "cli_session.json"
+
 def login(username, password):
-  result = db.session.execute(db.select(User).filter_by(username=username))
-  user = result.scalar_one_or_none()
-  if user and user.check_password(password):
-    # Store ONLY the user id as a string in JWT 'sub'
-    return create_access_token(identity=str(user.id))
-  return None
+  user = User.query.filter_by(username=username).first()
+  if not user or not user.check_password(password):
+     print('User not found or incorrect password')
+     return False
+  with open(SESSION_FILE, 'w') as f:
+     json.dump({"user_id": user.id, "user_type": user.type}, f)
+  print(f"Logged in as: {user.username} ({user.type})")
+  return True
+
+
+def logout():
+  if os.path.exists(SESSION_FILE):
+     os.remove(SESSION_FILE)
+     print("Logged out")
+  else:
+     print("Not logged in. Please log in.")
 
 
 def setup_jwt(app):

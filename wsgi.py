@@ -5,7 +5,7 @@ from flask.cli import with_appcontext, AppGroup
 from App.database import db, get_migrate
 from App.models import User
 from App.main import create_app
-from App.controllers import ( create_user, create_staff ,get_all_users_json, get_all_users, initialize )
+from App.controllers import ( create_user, create_staff ,get_all_users_json, get_all_users, initialize, login, logout )
 
 
 # This commands file allow you to create convenient CLI commands for testing controllers
@@ -42,9 +42,10 @@ def create_user_command(user_type, username, password):
     else:
         print('Command not recognized. Try flask user create <user_type> <username> <password>')
         return
-    print(f'{username} created!')
+    user = User.query.filter_by(username=username).first()
+    print(f'Created {user_type}: {username} (id = {user.id})')
 
-# this command will be : flask user create bob bobpass
+# this command will be : flask user create student bob bobpass
 
 @user_cli.command("list", help="Lists users in the database")
 @click.argument("format", default="string")
@@ -53,6 +54,17 @@ def list_user_command(format):
         print(get_all_users())
     else:
         print(get_all_users_json())
+
+@user_cli.command("login", help="Logs in the user")
+@click.argument("username", type=str)
+@click.argument("password", type=str)
+def login_user(username, password):
+    login(username, password)
+
+@user_cli.command("logout", help="Log out current user")
+def logout_user():
+    logout()
+
 
 app.cli.add_command(user_cli) # add the group to the cli
 
