@@ -3,9 +3,10 @@ from flask import Flask
 from flask.cli import with_appcontext, AppGroup
 
 from App.database import db, get_migrate
-from App.models import User
+from App.models import User, Student, Staff
 from App.main import create_app
-from App.controllers import ( create_user, create_staff ,get_all_users_json, get_all_users, initialize, login, logout )
+from App.controllers import ( create_user, create_staff ,get_all_users_json, get_all_users, initialize, login, logout, 
+                             get_current_user )
 
 
 # This commands file allow you to create convenient CLI commands for testing controllers
@@ -13,11 +14,38 @@ from App.controllers import ( create_user, create_staff ,get_all_users_json, get
 app = create_app()
 migrate = get_migrate(app)
 
+def require_role(role):
+    def decorator(func):
+        @click.pass_context
+        def wrapper(ctx, *args, **kwargs):
+            user = get_current_user()
+            if not user:
+                raise click.ClickException("Not logged.")
+            if user.type != role:
+                raise click.ClickException(f'Not logged in as {role}. Cannot perform this function.')
+            return ctx.invoke(func, *args, **kwargs, current_user=get_current_user)
+        return wrapper
+    return decorator
+
 # This command creates and initializes the database
 @app.cli.command("init", help="Creates and initializes the database")
 def init():
     initialize()
     print('database intialized')
+
+@app.cli.command("leaderboard", help="Shows the Leaderboard")
+def view_leaderboard():
+    students = (Student.query
+                .order_by(Student.hours.desc(), Student.username.asc())
+                .all())
+    
+    if not students:
+        print('No students added.')
+        return
+    print('=====LEADERBOARD=====')
+    for i, student in enumerate(students):
+        print(f'{i+1}. {student.username}: {student.hours} Hours')
+    
 
 '''
 User Commands
@@ -64,6 +92,40 @@ def login_user(username, password):
 @user_cli.command("logout", help="Log out current user")
 def logout_user():
     logout()
+
+@user_cli.command("log", help="Logs hours for student")
+@click.argument("username", type=str)
+@click.argument("hours", type=int)
+@require_role("staff")
+def log_hours(username, hours, current_user):
+    student = Student.query.filter_by(username=username).first()
+    if student:
+        currentHours = student.hours
+        newHours = currentHours + hours
+        student.set_hours(newHours)
+        db.session.add(student)
+        db.session.commit()
+        print(f"Logged {hours} hours for {username} successfully.")
+        print(f"{student.username}'s Total Hours: {student.hours} Hours")
+        return
+    print("User does not exist.")
+
+@user_cli.command("accolades", help="View milestone accolades")
+@require_role("student")
+def view_accolades(current_user):
+    user = get_current_user()
+    student = Student.query.get(user.id)
+    if student:
+        if student.hours < 10:
+            print('No milestone reached yet.')
+        if student.hours >= 10:
+            print('10 Hour Milestone')
+        if student.hours >= 25:
+            print('25 Hour Milestone')
+        if student.hours >= 50:
+            print('50 Hour Milestone')
+    else:
+        print('Student not found.')
 
 
 app.cli.add_command(user_cli) # add the group to the cli

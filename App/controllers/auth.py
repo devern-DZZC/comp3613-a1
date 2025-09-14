@@ -5,6 +5,14 @@ from App.database import db
 
 SESSION_FILE = "cli_session.json"
 
+def get_current_user():
+   if not os.path.exists(SESSION_FILE):
+      return None
+   with open(SESSION_FILE) as f:
+      data = json.load(f)
+      user = User.query.get(data['user_id'])
+      return user
+
 def login(username, password):
   user = User.query.filter_by(username=username).first()
   if not user or not user.check_password(password):
