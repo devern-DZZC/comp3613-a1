@@ -3,10 +3,10 @@ from flask import Flask
 from flask.cli import with_appcontext, AppGroup
 
 from App.database import db, get_migrate
-from App.models import User, Student, Staff
+from App.models import User, Student, Staff, Log, Request
 from App.main import create_app
 from App.controllers import ( create_user, create_staff ,get_all_users_json, get_all_users, initialize, login, logout, 
-                             get_current_user )
+                             get_current_user, get_all_logs, get_all_logs_json )
 
 
 # This commands file allow you to create convenient CLI commands for testing controllers
@@ -20,10 +20,10 @@ def require_role(role):
         def wrapper(ctx, *args, **kwargs):
             user = get_current_user()
             if not user:
-                raise click.ClickException("Not logged.")
+                raise click.ClickException("Not logged in.")
             if user.type != role:
                 raise click.ClickException(f'Not logged in as {role}. Cannot perform this function.')
-            return ctx.invoke(func, *args, **kwargs, current_user=get_current_user)
+            return ctx.invoke(func, *args, **kwargs, current_user=get_current_user())
         return wrapper
     return decorator
 
@@ -83,6 +83,24 @@ def list_user_command(format):
     else:
         print(get_all_users_json())
 
+@user_cli.command("logs", help="Lists logs in the database")
+@click.argument("format", default="string")
+def list_user_command(format):
+    if format == 'string':
+        print(get_all_logs())
+    else:
+        print(get_all_logs_json())
+
+@user_cli.command("requests", help="Lists requests in the database")
+@require_role("staff")
+def view_all_requests(current_user):
+    requests = Request.query.all()
+    print("REQUEST ID   STUDENT NAME    REQUESTED HOURS")
+    for request in requests:
+        student = Student.query.get(request.student_id)
+        print(f"{request.id}            {student.username}             {request.hours}")
+
+
 @user_cli.command("login", help="Logs in the user")
 @click.argument("username", type=str)
 @click.argument("password", type=str)
@@ -100,6 +118,8 @@ def logout_user():
 def log_hours(username, hours, current_user):
     student = Student.query.filter_by(username=username).first()
     if student:
+        log = Log(staff_id=current_user.id, student_id=student.id, hours=hours)
+        db.session.add(log)
         currentHours = student.hours
         newHours = currentHours + hours
         student.set_hours(newHours)
@@ -118,17 +138,31 @@ def view_accolades(current_user):
     if student:
         if student.hours < 10:
             print('No milestone reached yet.')
-        if student.hours >= 10:
-            print('10 Hour Milestone')
-        if student.hours >= 25:
-            print('25 Hour Milestone')
-        if student.hours >= 50:
-            print('50 Hour Milestone')
+        elif student.hours >= 10 and student.hours < 25:
+            student.accolade = "10 Hour Milestone"
+        elif student.hours >= 25 and student.hours < 50:
+            student.accolade = "25 Hour Milestone"
+        elif student.hours >= 50:
+            student.accolade = "50 Hour Milestone"
+        print(f"{student.username}'s Accolade: {student.accolade}")
     else:
         print('Student not found.')
 
 
 app.cli.add_command(user_cli) # add the group to the cli
+
+@user_cli.command("request", help="Allows a student to request hours")
+@click.argument("hours", type=int)
+@require_role("student")
+def request_hours(hours, current_user):
+    student = Student.query.get(current_user.id)
+    if student:
+        request = Request(student_id=current_user.id, hours=hours)
+        db.session.add(request)
+        db.session.commit()
+        print(f"{student.username} requested {hours} hours.")
+    else:
+        print('Student not found.')
 
 '''
 Test Commands
