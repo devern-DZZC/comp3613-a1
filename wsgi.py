@@ -27,6 +27,15 @@ def require_role(role):
         return wrapper
     return decorator
 
+def add_student_hours(student_id, hours):
+    student = Student.query.get(student_id)
+    if student:
+        currentHours = student.hours
+        newHours = currentHours + hours
+        student.set_hours(newHours)
+        db.session.add(student)
+        db.session.commit()
+
 # This command creates and initializes the database
 @app.cli.command("init", help="Creates and initializes the database")
 def init():
@@ -95,6 +104,9 @@ def list_user_command(format):
 @require_role("staff")
 def view_all_requests(current_user):
     requests = Request.query.all()
+    if not requests:
+        print('No requests found.')
+        return
     print("REQUEST ID   STUDENT NAME    REQUESTED HOURS")
     for request in requests:
         student = Student.query.get(request.student_id)
@@ -120,11 +132,7 @@ def log_hours(username, hours, current_user):
     if student:
         log = Log(staff_id=current_user.id, student_id=student.id, hours=hours)
         db.session.add(log)
-        currentHours = student.hours
-        newHours = currentHours + hours
-        student.set_hours(newHours)
-        db.session.add(student)
-        db.session.commit()
+        add_student_hours(student_id=student.id, hours=hours)
         print(f"Logged {hours} hours for {username} successfully.")
         print(f"{student.username}'s Total Hours: {student.hours} Hours")
         return
@@ -163,6 +171,30 @@ def request_hours(hours, current_user):
         print(f"{student.username} requested {hours} hours.")
     else:
         print('Student not found.')
+
+@user_cli.command("confirm", help="Approve/Reject requested hours")
+@click.argument("action", type=str)
+@click.argument("request_id", type=int)
+@require_role("staff")
+def confirm_hours(action, request_id, current_user):
+    request = Request.query.get(request_id)
+    if request:
+        student = Student.query.get(request.student_id)
+        if action == "approve":
+            log = Log(staff_id=current_user.id, student_id=request.student_id, hours=request.hours)
+            add_student_hours(student_id=student.id, hours=request.hours)
+            db.session.add(log)
+            db.session.delete(request)
+            db.session.commit()
+            print(f"{request.hours} hours approved for {student.username}")
+        elif action == "reject":
+            db.session.delete(request)
+            db.session.commit()
+            print(f"{request.hours} hours rejected for {student.username}")
+        else:
+            print("Wrong action entered. Please enter 'approve' or 'reject' followed by the request_id")
+    else:
+        print('Request not found.')
 
 '''
 Test Commands
