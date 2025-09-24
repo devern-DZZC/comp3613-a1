@@ -11,3 +11,6 @@ def get_all_logs_json():
         return []
     logs = [log.get_json() for log in logs]
     return logs
+
+def create_log():
+    return

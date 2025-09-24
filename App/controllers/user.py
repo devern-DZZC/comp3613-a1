@@ -19,6 +19,15 @@ def create_staff(username, password):
     db.session.commit()
     return newuser
 
+def add_student_hours(student_id, hours):
+    student = Student.query.get(student_id)
+    if student:
+        currentHours = student.hours
+        newHours = currentHours + hours
+        student.set_hours(newHours)
+        db.session.add(student)
+        db.session.commit()
+
 def get_user_by_username(username):
     result = db.session.execute(db.select(User).filter_by(username=username))
     return result.scalar_one_or_none()
