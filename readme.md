@@ -1,193 +1,82 @@
-[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/uwidcit/flaskmvc)
-<a href="https://render.com/deploy?repo=https://github.com/uwidcit/flaskmvc">
-  <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render">
-</a>
+# CLI Command Reference
 
-![Tests](https://github.com/uwidcit/flaskmvc/actions/workflows/dev.yml/badge.svg)
+A concise catalog of every Flask CLI command exposed by this app, grouped by area, with arguments, roles, and behavior.
 
-# Flask MVC Template
-A template for flask applications structured in the Model View Controller pattern [Demo](https://dcit-flaskmvc.herokuapp.com/). [Postman Collection](https://documenter.getpostman.com/view/583570/2s83zcTnEJ)
+---
 
+## Roles & Authentication
 
-# Dependencies
-* Python3/pip3
-* Packages listed in requirements.txt
+- Some commands are role‑protected via `require_role("student")` or `require_role("staff")`.
+- Run `flask user login` before any protected command.
+- Roles:
+  - **student**: can request hours and view accolades.
+  - **staff**: can log hours directly, list requests, and approve/reject requests.
 
-# Installing Dependencies
-```bash
-$ pip install -r requirements.txt
-```
+---
 
-# Configuration Management
+## App‑Level Commands
 
+### `flask init`
+- **Args:** none  
+- **Role:** anyone  
+- **Does:** Creates and initializes the database (runs `initialize()`).
 
-Configuration information such as the database url/port, credentials, API keys etc are to be supplied to the application. However, it is bad practice to stage production information in publicly visible repositories.
-Instead, all config is provided by a config file or via [environment variables](https://linuxize.com/post/how-to-set-and-list-environment-variables-in-linux/).
+### `flask leaderboard`
+- **Args:** none  
+- **Role:** anyone  
+- **Does:** Prints a ranked list of students by total hours (descending; tie‑break by username).
 
-## In Development
+---
 
-When running the project in a development environment (such as gitpod) the app is configured via default_config.py file in the App folder. By default, the config for development uses a sqlite database.
+## User Group Commands (`flask user …`)
 
-default_config.py
-```python
-SQLALCHEMY_DATABASE_URI = "sqlite:///temp-database.db"
-SECRET_KEY = "secret key"
-JWT_ACCESS_TOKEN_EXPIRES = 7
-ENV = "DEVELOPMENT"
-```
+### `flask user create <user_type> <username> <password>`
+- **Role:** anyone  
+- **Does:** Creates a user.  
+- **Notes:** `user_type` must be `student` or `staff`.
 
-These values would be imported and added to the app in load_config() function in config.py
+### `flask user list [string|json]`
+- **Role:** anyone  
+- **Does:** Lists all users.  
+- **Notes:** Output format defaults to `string`; `json` prints JSON.
 
-config.py
-```python
-# must be updated to inlude addtional secrets/ api keys & use a gitignored custom-config file instad
-def load_config():
-    config = {'ENV': os.environ.get('ENV', 'DEVELOPMENT')}
-    delta = 7
-    if config['ENV'] == "DEVELOPMENT":
-        from .default_config import JWT_ACCESS_TOKEN_EXPIRES, SQLALCHEMY_DATABASE_URI, SECRET_KEY
-        config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
-        config['SECRET_KEY'] = SECRET_KEY
-        delta = JWT_ACCESS_TOKEN_EXPIRES
-...
-```
+### `flask user logs [string|json]`
+- **Role:** anyone  
+- **Does:** Lists all hour logs.  
+- **Notes:** Output format defaults to `string`; `json` prints JSON.
 
-## In Production
+### `flask user login <username> <password>`
+- **Role:** anyone  
+- **Does:** Logs in the user for role‑protected commands.
 
-When deploying your application to production/staging you must pass
-in configuration information via environment tab of your render project's dashboard.
+### `flask user logout`
+- **Role:** anyone  
+- **Does:** Logs out the current user.
 
-![perms](./images/fig1.png)
+### `flask user log <student_username> <hours> <activity_name>`
+- **Role:** staff  
+- **Does:** Adds a log entry for the student and increments the student’s total hours.  
+- **Notes:** Fails if the activity name does not exist.
 
-# Flask Commands
+### `flask user request <hours> <activity_name>`
+- **Role:** student  
+- **Does:** Creates a request for staff approval to add hours for a specific activity.  
+- **Notes:** Fails if the activity name does not exist.
 
-wsgi.py is a utility script for performing various tasks related to the project. You can use it to import and test any code in the project. 
-You just need create a manager command function, for example:
+### `flask user requests`
+- **Role:** staff  
+- **Does:** Shows all pending hour requests.  
+- **Columns:** Request ID, Student Name, Activity, Requested Hours.
 
-```python
-# inside wsgi.py
+### `flask user confirm <approve|reject> <request_id>`
+- **Role:** staff  
+- **Does:** Approves or rejects a pending request.  
+- **Approve:** Creates a log, adds hours to the student, removes the request.  
+- **Reject:** Removes the request without adding hours.
 
-user_cli = AppGroup('user', help='User object commands')
+### `flask user accolades`
+- **Role:** student  
+- **Does:** Displays per‑activity milestone status for the current user using `resolve_milestone` and `milestones_for`.  
+- **Output:** One line per activity indicating current milestone and progress toward the next.
 
-@user_cli.cli.command("create-user")
-@click.argument("username")
-@click.argument("password")
-def create_user_command(username, password):
-    create_user(username, password)
-    print(f'{username} created!')
-
-app.cli.add_command(user_cli) # add the group to the cli
-
-```
-
-Then execute the command invoking with flask cli with command name and the relevant parameters
-
-```bash
-$ flask user create bob bobpass
-```
-
-
-# Running the Project
-
-_For development run the serve command (what you execute):_
-```bash
-$ flask run
-```
-
-_For production using gunicorn (what the production server executes):_
-```bash
-$ gunicorn wsgi:app
-```
-
-# Deploying
-You can deploy your version of this app to render by clicking on the "Deploy to Render" link above.
-
-# Initializing the Database
-When connecting the project to a fresh empty database ensure the appropriate configuration is set then file then run the following command. This must also be executed once when running the app on heroku by opening the heroku console, executing bash and running the command in the dyno.
-
-```bash
-$ flask init
-```
-
-# Database Migrations
-If changes to the models are made, the database must be'migrated' so that it can be synced with the new models.
-Then execute following commands using manage.py. More info [here](https://flask-migrate.readthedocs.io/en/latest/)
-
-```bash
-$ flask db init
-$ flask db migrate
-$ flask db upgrade
-$ flask db --help
-```
-
-# Testing
-
-## Unit & Integration
-Unit and Integration tests are created in the App/test. You can then create commands to run them. Look at the unit test command in wsgi.py for example
-
-```python
-@test.command("user", help="Run User tests")
-@click.argument("type", default="all")
-def user_tests_command(type):
-    if type == "unit":
-        sys.exit(pytest.main(["-k", "UserUnitTests"]))
-    elif type == "int":
-        sys.exit(pytest.main(["-k", "UserIntegrationTests"]))
-    else:
-        sys.exit(pytest.main(["-k", "User"]))
-```
-
-You can then execute all user tests as follows
-
-```bash
-$ flask test user
-```
-
-You can also supply "unit" or "int" at the end of the comand to execute only unit or integration tests.
-
-You can run all application tests with the following command
-
-```bash
-$ pytest
-```
-
-## Test Coverage
-
-You can generate a report on your test coverage via the following command
-
-```bash
-$ coverage report
-```
-
-You can also generate a detailed html report in a directory named htmlcov with the following comand
-
-```bash
-$ coverage html
-```
-
-# Troubleshooting
-
-## Views 404ing
-
-If your newly created views are returning 404 ensure that they are added to the list in main.py.
-
-```python
-from App.views import (
-    user_views,
-    index_views
-)
-
-# New views must be imported and added to this list
-views = [
-    user_views,
-    index_views
-]
-```
-
-## Cannot Update Workflow file
-
-If you are running into errors in gitpod when updateding your github actions file, ensure your [github permissions](https://gitpod.io/integrations) in gitpod has workflow enabled ![perms](./images/gitperms.png)
-
-## Database Issues
-
-If you are adding models you may need to migrate the database with the commands given in the previous database migration section. Alternateively you can delete you database file.
+---
